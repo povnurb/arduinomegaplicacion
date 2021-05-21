@@ -176,7 +176,7 @@ void process_sensors()
       }
   //inicia las variables programadas
     }else{
-    mqtt_data_doc["variables"][var]["last"]["value"]=digitalRead(entradaAlarmas[var-1]);
+    mqtt_data_doc["variables"][var]["last"]["value"]=!digitalRead(entradaAlarmas[var-1]);
     //Serial.print(digitalRead(entradaAlarmas[var]));
     }
   }
