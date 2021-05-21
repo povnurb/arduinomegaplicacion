@@ -26,6 +26,7 @@ IPAddress subnet(255,255,255,0);
 
 //PINS
 #define led 2 //pin indicador de alarma BUILTIN_LED
+
 // //WiFi solo para el esp o conexiones via wifi
 // const char *wifi_ssid = "INFINITUM72D1_2.4"; //INFINITUM72D1_2.4 - INFINITUM59W1_2.4
 // const char *wifi_password = "5X4X3EeaX9"; //5X4X3EeaX9 - unJvpTX5Vp
@@ -35,6 +36,11 @@ IPAddress subnet(255,255,255,0);
 float temp; // Variable para almacenar el valor obtenido del sensor 
 const int DHTPin = A0; // Variable del pin de entrada del sensor (A0)
 DHT dht(DHTPin, DHT22);
+
+//pines de alarma
+const int cantidadAlarmas = 12;
+int entradaAlarmas[cantidadAlarmas] = {22,24,26,28,30,32,34,36,38,40,42,44}; //Allocate 10 spaces and name the output pin address.
+int indicadoresLed[cantidadAlarmas] = {23,25,27,29,31,33,35,37,39,41,43,45};
 
 //configuracion de reinicio arduino
 #define Reinicio asm("jmp 0x0000") //para REINICIAR ARDUINO
@@ -57,9 +63,9 @@ void callback(char *topic, byte *payload, unsigned int length);
 void process_incoming_msg(String topic, String incoming);
 void sinConexion(); //aun por escribir
 void sinConexion2(); //aun por escribir
-void clear();
+void clear(); //solo funciona para el esp32
 void restart();
-// void print_stats();
+void print_stats();
 
 
 
@@ -69,7 +75,7 @@ EthernetClient espclient;
 PubSubClient client(espclient);
 IoTicosSplitter splitter;
 long lastReconnectAttemp = 0;
-long varsLastSend[12];
+long varsLastSend[cantidadAlarmas+1]; //variable que indica la cantidad de topicos
 String last_received_msg = "";
 String last_received_topic = "";
 int prev_temp = 0;
@@ -85,11 +91,22 @@ void setup()
   lcd.backlight();
   Serial.begin(9600);
   pinMode(led, OUTPUT); //indica si existe alguna alarma
-  clear();
+  //clear(); //solo funciona para el esp32
   
+  //configuracion de pines de salida donde iran los leds (impares)
+  for (int var = 0; var < cantidadAlarmas; var++){
+    pinMode(indicadoresLed[var], OUTPUT); 
+    digitalWrite(indicadoresLed[var],LOW);
+  }
+  //configuracion de los pines de entrada son los pines pares
+  for (int var = 0; var < cantidadAlarmas; var++){
+    pinMode(entradaAlarmas[var], INPUT_PULLUP); 
+    Serial.print(entradaAlarmas[var]);
+    digitalWrite(entradaAlarmas[var],HIGH);
+  }
+
   Serial.print("\n\n\nEthernet Connection in progres");
   
-
   int counter = 0; // intentos de conexion
   Ethernet.begin(ethernet_mac, ip, gateway, subnet); //https://programarfacil.com/blog/arduino-blog/ethernet-shield-arduino/
   while(Ethernet.begin(ethernet_mac)<= 0) //https://programarfacil.com/blog/arduino-blog/ethernet-shield-arduino/) 
@@ -131,32 +148,42 @@ void loop()
 
 
 
-//USER FUNTIONS ⤵ Sensor de Temperatura
+//USER FUNTIONS ⤵ Sensor de Temperatura y sensores
 void process_sensors()
 {
   //variable local que cuenta cuantas veces se indica el valor de la temperatura
   temp=dht.readTemperature();
   //Serial.println(temp);
-  
-  mqtt_data_doc["variables"][0]["last"]["value"] = temp;
-  
-  //save temp?
-  if(cont > 500){ //cada 5 min salvara la medicion
-  cont = 0;
-    mqtt_data_doc["variables"][0]["last"]["save"] = 1;
-    Serial.println("Manda a salvar el dato");
-    enviar=1;
+  for (int var = 0; var < cantidadAlarmas+1; var++){
+    if(var==0){
+      mqtt_data_doc["variables"][0]["last"]["value"] = temp;
+      
+      //save temp?
+      if(cont > 500){ //cada 500 lecturas salvara la medicion
+      cont = 0;
+      
+      }
+      else
+      {
+        cont ++;
+        mqtt_data_doc["variables"][0]["last"]["save"] = 0;
+        enviar=0; 
+        if(cont==100){
+          mqtt_data_doc["variables"][0]["last"]["save"] = 1;
+          Serial.println("Manda a salvar el dato");
+          enviar=1;
+        }
+      }
+  //inicia las variables programadas
+    }else{
+    mqtt_data_doc["variables"][var]["last"]["value"]=digitalRead(entradaAlarmas[var-1]);
+    //Serial.print(digitalRead(entradaAlarmas[var]));
+    }
   }
-  else
-  {
-    cont ++;
-    Serial.print(".");
-    mqtt_data_doc["variables"][0]["last"]["save"] = 0;
-    enviar=0;
-  }
+  
 }
 
-
+//actuadores que manda a encender o apagar cualquier cosa aun sin uso
 void process_actuators()
 {
   if (mqtt_data_doc["variables"][9]["last"]["value"] == "Encender")
@@ -225,21 +252,20 @@ void send_data_to_broker()
 {
 
   long now = millis();
-
-  for (int i = 0; i < int(mqtt_data_doc["variables"].size()); i++)
+  for (int i = 0; i < cantidadAlarmas+1; i++) //catidadAlarmas+1 por que se agrega el sensor de temperatura
   {
-
+    
     if (mqtt_data_doc["variables"][i]["variableType"] == "output")
     {
       continue;
     }
 
     int freq = mqtt_data_doc["variables"][i]["variableSendFreq"];
-
+    
     if (now - varsLastSend[i] > freq * 1000 || enviar == 1) // envia info cada 1 seg
     {
       varsLastSend[i] = millis();
-
+      enviar=0; //para reiniciar ya que si no se queda con valor a uno y tarda mas de 2 min en mandar datos
       String str_root_topic = mqtt_data_doc["topic"];
       String str_variable = mqtt_data_doc["variables"][i]["variable"];
       String topic = str_root_topic + str_variable + "/sdata";
@@ -249,14 +275,16 @@ void send_data_to_broker()
       serializeJson(mqtt_data_doc["variables"][i]["last"], toSend);
 
       client.publish(topic.c_str(), toSend.c_str());
-      //Serial.print(topic.c_str());
-      //Serial.println(toSend.c_str()); //dato a enviar
+      
+      // Serial.print(topic.c_str());
+      // Serial.println(toSend.c_str()); //dato a enviar
 
 
       //STATS
       long counter = mqtt_data_doc["variables"][i]["counter"];
       counter++;
       mqtt_data_doc["variables"][i]["counter"] = counter;
+      
 
     }
   }
@@ -329,7 +357,7 @@ void check_mqtt_connection()
     client.loop();
     process_sensors();
     send_data_to_broker();
-    // print_stats();
+    print_stats();
   }
 }
 
@@ -387,8 +415,8 @@ if(!http.connected())
   if (response == 200)
   {
     String responseBody = http.responseBody();  //http.readString()
-    Serial.println(responseBody);
-    Serial.print("\n\n         Mqtt Credentials Obtained Successfully :) ");
+    //Serial.println(responseBody);
+    Serial.print("\n\n         Mqtt Credentials Obtained Successfully :) linea 412");
     deserializeJson(mqtt_data_doc, responseBody); //pendiente la conexion a mqtt
     http.flush();
     http.stop();
@@ -402,14 +430,14 @@ void restart(){
   Reinicio;
 }
 
-//limpia la pantalla de la terminal
-void clear()
-{
-  Serial.write(27);    // ESC command
-  Serial.print("[2J"); // clear screen command
-  Serial.write(27);
-  Serial.print("[H"); // cursor to home command
-}
+//limpia la pantalla de la terminal solo para el esp32
+// void clear()
+// {
+//   Serial.write(27);    // ESC command
+//   Serial.print("[2J"); // clear screen command
+//   Serial.write(27);
+//   Serial.print("[H"); // cursor to home command
+// }
 
 long lastStats = 0;
 
@@ -430,37 +458,26 @@ void sinConexion2(){
   lcd.setCursor(0,1);
   lcd.print("Reiniciando.....");
 }
-// void print_stats()
-// {
-//   long now = millis();
+//esto que da para posible despues--------------------------------
+void print_stats()
+{
+  
+    // clear(); //solo funciona para el esp32
+    Serial.print("------------------------------");
+    Serial.print(cont);
+    Serial.println("------------------------------");
+    Serial.print("# \t Name \t\t\t Var \t\t Type \t Count \t\t Msg\n\n");
 
-//   if (now - lastStats > 3000)
-//   {
-//     lastStats = millis();
-//     clear();
+    for (int i = 0; i < cantidadAlarmas+1; i++)
+    {
 
-//     Serial.print("\n");
-//     Serial.print(Purple + "\n╔══════════════════════════╗" + fontReset);
-//     Serial.print(Purple + "\n║       SYSTEM STATS       ║" + fontReset);
-//     Serial.print(Purple + "\n╚══════════════════════════╝" + fontReset);
-//     Serial.print("\n\n");
-    
+      String variableFullName = mqtt_data_doc["variables"][i]["variableFullName"];
+      String variable = mqtt_data_doc["variables"][i]["variable"];
+      String variableType = mqtt_data_doc["variables"][i]["variableType"];
+      String lastMsg = mqtt_data_doc["variables"][i]["last"];
+      long counter = mqtt_data_doc["variables"][i]["counter"];
 
-//     Serial.print(boldCyan + "#" + " \t Name" + " \t\t\t Var" + " \t\t Type" + " \t\t Count" + " \t\t Last V" + fontReset + "\n\n");
-
-//     for (int i = 0; i < mqtt_data_doc["variables"].size(); i++)
-//     {
-
-//       String variableFullName = mqtt_data_doc["variables"][i]["variableFullName"];
-//       String variable = mqtt_data_doc["variables"][i]["variable"];
-//       String variableType = mqtt_data_doc["variables"][i]["variableType"];
-//       String lastMsg = mqtt_data_doc["variables"][i]["last"];
-//       long counter = mqtt_data_doc["variables"][i]["counter"];
-
-//       Serial.println(String(i) + " \t " + variableFullName.substring(0,9) + " \t\t " + variable.substring(0,10) + " \t " + variableType.substring(0,5) + " \t\t " + String(counter).substring(0,10) + " \t\t " + lastMsg);
-//     }
-
-
-//     Serial.print("\n Last Incomming Msg -> " + last_received_msg);
-//   }
-// }
+      Serial.println(String(i) + " \t " + variableFullName.substring(0,9) + " \t\t " + variable.substring(0,10) + " \t " + variableType.substring(0,5) + " \t " + String(counter).substring(0,10) + " \t " + lastMsg);
+    }
+  
+}
