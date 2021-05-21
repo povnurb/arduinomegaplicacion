@@ -92,7 +92,7 @@ void setup()
 
   int counter = 0; // intentos de conexion
   Ethernet.begin(ethernet_mac, ip, gateway, subnet); //https://programarfacil.com/blog/arduino-blog/ethernet-shield-arduino/
-  while(Ethernet.begin(ethernet_mac)<= 0); //https://programarfacil.com/blog/arduino-blog/ethernet-shield-arduino/) 
+  while(Ethernet.begin(ethernet_mac)<= 0) //https://programarfacil.com/blog/arduino-blog/ethernet-shield-arduino/) 
   {
     delay(500);
     Serial.print(".");
@@ -150,6 +150,7 @@ void process_sensors()
   else
   {
     cont ++;
+    Serial.print(".");
     mqtt_data_doc["variables"][0]["last"]["save"] = 0;
     enviar=0;
   }
@@ -275,8 +276,8 @@ bool reconnect()
   //Setting up Mqtt Server
   client.setServer(mqtt_server, 1883);
 
-  Serial.print("\n\n\nIntentando Conexion MQTT  ⤵");
-  Serial.print("Linea 276");
+  Serial.println("\n\n\nIntentando Conexion MQTT  ⤵");
+  Serial.println("Linea 276");
   String str_client_id = "device_" + dId + "_" + random(1, 9999);
   const char *username = mqtt_data_doc["username"];
   const char *password = mqtt_data_doc["password"];
@@ -284,7 +285,7 @@ bool reconnect()
 
   if (client.connect(str_client_id.c_str(), username, password))
   {
-    Serial.print("\n\n         Mqtt Client Connected :) ");
+    Serial.println("\n\n         Mqtt Client Connected :) ");
     delay(2000);
 
     client.subscribe((str_topic + "+/actdata").c_str());
