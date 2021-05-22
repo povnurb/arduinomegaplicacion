@@ -188,6 +188,7 @@ void process_sensors()
         valor = 1;
       }
     mqtt_data_doc["variables"][var]["last"]["value"]=valor;
+    digitalWrite(indicadoresLed[var-1],valor); //para poner leds
     //Serial.print(digitalRead(entradaAlarmas[var]));
     }
   }
