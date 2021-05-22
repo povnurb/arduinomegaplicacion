@@ -152,6 +152,7 @@ void loop()
 void process_sensors()
 {
   //variable local que cuenta cuantas veces se indica el valor de la temperatura
+  int valor = 1;
   temp=dht.readTemperature();
   //Serial.println(temp);
   for (int var = 0; var < cantidadAlarmas+1; var++){
@@ -173,10 +174,20 @@ void process_sensors()
           Serial.println("Manda a salvar el dato");
           enviar=1;
         }
+        if(cont==200 && temp > 29){
+          mqtt_data_doc["variables"][0]["last"]["save"] = 1;
+          Serial.println("Manda a salvar el dato");
+          enviar=1;
+        }
       }
   //inicia las variables programadas
     }else{
-    mqtt_data_doc["variables"][var]["last"]["value"]=!digitalRead(entradaAlarmas[var-1]);
+      if(digitalRead(entradaAlarmas[var-1])== true){
+        valor = 0;
+      }else{
+        valor = 1;
+      }
+    mqtt_data_doc["variables"][var]["last"]["value"]=valor;
     //Serial.print(digitalRead(entradaAlarmas[var]));
     }
   }
@@ -281,9 +292,9 @@ void send_data_to_broker()
 
 
       //STATS
-      long counter = mqtt_data_doc["variables"][i]["counter"];
-      counter++;
-      mqtt_data_doc["variables"][i]["counter"] = counter;
+      // long counter = mqtt_data_doc["variables"][i]["counter"];
+      // counter++;
+      // mqtt_data_doc["variables"][i]["counter"] = counter;
       
 
     }
@@ -461,12 +472,12 @@ void sinConexion2(){
 //esto que da para posible despues--------------------------------
 void print_stats()
 {
-  
+    
     // clear(); //solo funciona para el esp32
-    Serial.print("------------------------------");
+    Serial.print("-----------------------------------");
     Serial.print(cont);
-    Serial.println("------------------------------");
-    Serial.print("# \t Name \t\t\t Var \t\t Type \t Count \t\t Msg\n\n");
+    Serial.println("---------------------------------");
+    Serial.print("# \t Name \t\t\t Var \t\t Type \t\t Msg\n\n");
 
     for (int i = 0; i < cantidadAlarmas+1; i++)
     {
@@ -475,9 +486,9 @@ void print_stats()
       String variable = mqtt_data_doc["variables"][i]["variable"];
       String variableType = mqtt_data_doc["variables"][i]["variableType"];
       String lastMsg = mqtt_data_doc["variables"][i]["last"];
-      long counter = mqtt_data_doc["variables"][i]["counter"];
+      // long counter = mqtt_data_doc["variables"][i]["counter"];
 
-      Serial.println(String(i) + " \t " + variableFullName.substring(0,9) + " \t\t " + variable.substring(0,10) + " \t " + variableType.substring(0,5) + " \t " + String(counter).substring(0,10) + " \t " + lastMsg);
+      Serial.println(String(i) + " \t " + variableFullName.substring(0,12) + " \t\t " + variable.substring(0,10) + " \t " + variableType.substring(0,5) + " \t " + lastMsg);
     }
   
 }
