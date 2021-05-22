@@ -9,6 +9,7 @@
 #include <DHT_U.h> //libreria DHT_Unified_sensor by Adafruit
 #include <PubSubClient.h> //Libreria Pubsubclient by Nick O´leary
 #include <LiquidCrystal_I2C.h> //Libreria LiquidCrystal_I2C by Frank Brabander
+#include <Wire.h> //necesaria para la comunicacion I2C de LiquidCrystal
 
 //video 194 variables a setear
 String dId = "12341234"; //esta yo se la defino a mi arduino para pejelagartero
@@ -46,7 +47,7 @@ int indicadoresLed[cantidadAlarmas] = {23,25,27,29,31,33,35,37,39,41,43,45};
 #define Reinicio asm("jmp 0x0000") //para REINICIAR ARDUINO
 
 //configuracion para cristal i2c con adaptador serial
-LiquidCrystal_I2C lcd(0x27,16,2);  // SDA - A4 ,SCL - A5
+LiquidCrystal_I2C lcd(0x27,16,2);  // ARDUINO NANO(SDA-A4, SCL-A5) ARDUINO MEGA(SDA-20, SCL-21)
 //mas info https://naylampmechatronics.com/blog/35_tutorial-lcd-con-i2c-controla-un-lcd-con-solo-dos-pines.html
 
 //pines a usar en el arduino 
@@ -89,6 +90,10 @@ void setup()
   dht.begin();
   lcd.init();
   lcd.backlight();
+  lcd.setCursor(0,0);
+  lcd.print("OBTENIENDO");
+  lcd.setCursor(0,1);
+  lcd.print(" IP ");
   Serial.begin(9600);
   pinMode(led, OUTPUT); //indica si existe alguna alarma
   //clear(); //solo funciona para el esp32
@@ -136,8 +141,10 @@ void setup()
   Serial.print("\n         Local Mask -> ");
   Serial.print(Ethernet.subnetMask());
   Serial.println("");
+  lcd.setCursor(0,0);
+  lcd.print(Ethernet.localIP());
   client.setCallback(callback); //se activa el callback con la funcion clien.loop
-
+  
 }
 
 void loop()
@@ -370,6 +377,10 @@ void check_mqtt_connection()
     process_sensors();
     send_data_to_broker();
     print_stats();
+    lcd.setCursor(0,1);
+    lcd.print("TEMP: ");
+    lcd.print(temp,1);
+    lcd.print(" C" );
   }
 }
 
