@@ -13,7 +13,7 @@
 
 //video 194 variables a setear
 String dId = "12341234"; //esta yo se la defino a mi arduino para pejelagartero
-String webhook_pass = "VFduACaDLs"; //esta me la da la aplicacion
+String webhook_pass = "SJ6yYVqZRT"; //esta me la da la aplicacion
 String webhook_endpoint = "http://192.168.1.76:3001/api/getdevicecredentials"; //endpoint donde pedira las credenciales
 const char *mqtt_server = "192.168.1.76"; //192.168.1.76 para la mac
 
@@ -176,12 +176,17 @@ void process_sensors()
         cont ++;
         mqtt_data_doc["variables"][0]["last"]["save"] = 0;
         enviar=0; 
-        if(cont==100){
+        if(cont==1){
           mqtt_data_doc["variables"][0]["last"]["save"] = 1;
           Serial.println("Manda a salvar el dato");
           enviar=1;
         }
-        if(cont==200 && temp > 29){
+        if(cont==100 && temp > 29){
+          mqtt_data_doc["variables"][0]["last"]["save"] = 1;
+          Serial.println("Manda a salvar el dato");
+          enviar=1;
+        }
+        if(cont==250){
           mqtt_data_doc["variables"][0]["last"]["save"] = 1;
           Serial.println("Manda a salvar el dato");
           enviar=1;
@@ -376,7 +381,7 @@ void check_mqtt_connection()
     client.loop();
     process_sensors();
     send_data_to_broker();
-    print_stats();
+    //print_stats(); //Solo para pruebas
     lcd.setCursor(0,1);
     lcd.print("TEMP: ");
     lcd.print(temp,1);
